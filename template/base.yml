@@ -1,0 +1,7 @@
+#cloud-config
+packages:
+  - qemu-guest-agent
+runcmd:
+  - systemctl enable qemu-guest-agent || true
+  - systemctl start qemu-guest-agent || true
+  - systemctl enable ssh || systemctl enable sshd || true
