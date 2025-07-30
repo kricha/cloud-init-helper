@@ -1,4 +1,5 @@
 #cloud-config
+---
 groups:
   - docker
 users:
@@ -39,7 +40,9 @@ runcmd:
   - |
     PRIMARY_USER=$(getent passwd 1000 | cut -d: -f1)
     if [ -n "$PRIMARY_USER" ]; then
-      usermod -aG docker "$PRIMARY_USER" || logger -t cloud-init "Failed to add $PRIMARY_USER to docker group"
+      if ! usermod -aG docker "$PRIMARY_USER"; then
+        logger -t cloud-init "Failed to add $PRIMARY_USER to docker group"
+      fi
       logger -t cloud-init "Added user $PRIMARY_USER to docker group"
     else
       logger -t cloud-init "No user with UID 1000 found"
