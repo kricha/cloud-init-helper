@@ -5,6 +5,8 @@ groups:
 users:
   - default
 packages:
+  - sudo
+  - curl
   - qemu-guest-agent
 write_files:
   # MOTD welcome message
