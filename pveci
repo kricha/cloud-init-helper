@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Helper functions
+# Helper function to check if required commands are available
 check_command() {
     if ! command -v "$1" >/dev/null 2>&1; then
         echo "✗ Error: Required command '$1' not found"
@@ -33,7 +33,7 @@ CORES=1
 DISK_SIZE="10G"
 NETWORK_BRIDGE="vmbr0"
 STORAGE=""
-CLOUD_CONFIG="https://raw.githubusercontent.com/kricha/cloud-init-helper/refs/heads/main/templates/base.yml"
+CLOUD_CONFIG="https://raw.githubusercontent.com/kricha/cloud-init-helper/refs/heads/main/templates/base.yaml"
 SNIPPETS_DIR="/var/lib/vz/snippets"
 CLOUD_CONFIG_FILE="script-cloud-config.yaml"
 DRY_RUN=false
@@ -184,7 +184,6 @@ if [ -z "$VM_NAME" ]; then
     VM_NAME="cloud-init-$(basename "$IMAGE_URL" | cut -d. -f1)"
 fi
 
-CI_IMG=cloud_init_image.img
 # Auto-detect storage
 if [ -z "$STORAGE" ]; then
     STORAGE=$(pvesm status -content images | awk 'NR>1 {print $1; exit}')
@@ -279,7 +278,7 @@ fi
 echo "✓ Image format validated"
 
 echo "Resizing image.."
-if qemu-img resize $CI_IMG $DISK_SIZE; then
+if qemu-img resize "$CI_IMG" "$DISK_SIZE"; then
     echo "✓ Image resized successfully"
 else
     echo "✗ Error: Failed to resize image"
@@ -290,12 +289,12 @@ fi
 # Create VM without the disk first
 echo "Creating VM..."
 if qm create "$VM_ID" --name "$VM_NAME" --ostype l26 \
-    --memory $MEMORY --balloon 0 \
+    --memory "$MEMORY" --balloon 0 \
     --agent 1 \
     --bios ovmf --machine q35 --efidisk0 "$STORAGE":0,pre-enrolled-keys=0 \
-    --cpu host --socket 1 --cores $CORES \
+    --cpu host --socket 1 --cores "$CORES" \
     --vga serial0 --serial0 socket \
-    --net0 virtio,bridge=$NETWORK_BRIDGE \
+    --net0 virtio,bridge="$NETWORK_BRIDGE" \
     --scsihw virtio-scsi-pci; then
     echo "✓ VM $VM_ID created successfully"
 else
@@ -382,6 +381,16 @@ qm set "$VM_ID" --ipconfig0 ip=dhcp || { echo "✗ Failed to set network setting
 
 # Add tags
 qm set "$VM_ID" --tags cloud-init,kricha || { echo "✗ Failed to set tags"; exit 1; }
+
+# Add description with creation info
+qm set "$VM_ID" --description "<h3>✨ Created with cloud-init-helper</h3>
+<p>This template was created using <a href='https://github.com/kricha/cloud-init-helper' target='_blank'>cloud-init-helper</a></p>
+
+<h4>Template Details:</h4>
+<ul>
+  <li><b>Source Image:</b> $IMAGE_URL</li>
+  <li><b>Cloud Config:</b> $CLOUD_CONFIG</li>
+</ul>" || { echo "✗ Failed to set description"; exit 1; }
 
 # Convert to template
 echo "Converting to template..."
