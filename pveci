@@ -39,7 +39,6 @@ CLOUD_CONFIG_FILE="script-cloud-config.yaml"
 DRY_RUN=false
 SSD=1
 LOCAL_IMAGE=0
-LOCAL_CONFIG=0
 
 # Function to show usage
 show_usage() {
@@ -335,42 +334,25 @@ echo "Processing cloud-init configuration..."
 if is_url "$CLOUD_CONFIG"; then
     # For URLs, we need wget
     check_command wget
-    
     echo "Downloading cloud-config from URL: $CLOUD_CONFIG"
-    if wget -q "$CLOUD_CONFIG" -O "$SNIPPETS_DIR/$CLOUD_CONFIG_FILE"; then
-        echo "✓ Cloud-config downloaded successfully"
-        LOCAL_CONFIG=0
-    else
+    if ! wget -q -O - "$CLOUD_CONFIG" > "$SNIPPETS_DIR/$CLOUD_CONFIG_FILE"; then
         echo "✗ Error: Failed to download cloud-config from URL"
         exit 1
     fi
+    echo "✓ Cloud-config downloaded successfully"
 else
     # Handle local file
-    if [ ! -f "$CLOUD_CONFIG" ]; then
-        echo "✗ Error: Cloud-config file '$CLOUD_CONFIG' does not exist"
+    if [ ! -f "$CLOUD_CONFIG" ] || [ ! -r "$CLOUD_CONFIG" ]; then
+        echo "✗ Error: Cloud-config file '$CLOUD_CONFIG' does not exist or is not readable"
         exit 1
     fi
-    if [ ! -r "$CLOUD_CONFIG" ]; then
-        echo "✗ Error: Cannot read cloud-config file '$CLOUD_CONFIG'"
-        exit 1
-    fi
-    
-    # Validate YAML format
-    if command -v python3 >/dev/null 2>&1; then
-        if ! python3 -c "import yaml; yaml.safe_load(open('$CLOUD_CONFIG'))" 2>/dev/null; then
-            echo "✗ Warning: Cloud-config file might not be valid YAML"
-            echo "  Consider validating at https://www.yamllint.com/"
-        fi
-    fi
-    
     echo "Using cloud-config from file: $CLOUD_CONFIG"
-    if ! cp "$CLOUD_CONFIG" "$SNIPPETS_DIR/$CLOUD_CONFIG_FILE"; then
-        echo "✗ Error: Failed to copy cloud-config file"
+    if ! cat "$CLOUD_CONFIG" > "$SNIPPETS_DIR/$CLOUD_CONFIG_FILE"; then
+        echo "✗ Error: Failed to read cloud-config file"
         exit 1
     fi
-    echo "✓ Cloud-config file copied successfully"
-    LOCAL_CONFIG=1
 fi
+echo "✓ Cloud-config processed successfully"
 
 # Apply cloud-init configuration
 echo "Configuring cloud-init settings..."
