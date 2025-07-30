@@ -1,6 +1,11 @@
 # Cloud Init Helper for Proxmox
 
-A robust shell script tool for creating cloud-init enabled VM templates in Proxmox VE.
+> 🚀 A powerful shell script for automating cloud-init VM template creation in Proxmox VE.
+> Streamline your VM deployment with smart defaults, custom configurations, and comprehensive error handling.
+
+[![Shell Script](https://img.shields.io/badge/shell_script-%23121011.svg?style=flat&logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
+[![Proxmox](https://img.shields.io/badge/proxmox-%23E57000.svg?style=flat&logo=proxmox&logoColor=white)](https://www.proxmox.com/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
 ## Features
 

@@ -4,5 +4,8 @@ rules:
   comments:
     ignore: |
       templates/*.yaml  # Ignore #cloud-config comment in templates
+  line-length:
+    ignore: |
+      templates/base.yaml
   document-start:
     level: warning
