@@ -5,6 +5,7 @@ This directory contains examples of how to use the `pveci` tool in different sce
 ## 1. Create a Development VM
 
 Create a development environment with common tools:
+
 ```bash
 ./pveci \
     --url https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img \
@@ -22,6 +23,7 @@ ssh developer@<vm-ip>
 ## 2. Minimal Server
 
 Create a minimal server with basic configuration:
+
 ```bash
 ./pveci \
     --url https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img \
@@ -35,6 +37,7 @@ Create a minimal server with basic configuration:
 ## 3. Docker Host
 
 Create a Docker-ready host:
+
 ```bash
 ./pveci \
     --url https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img \
@@ -49,6 +52,7 @@ Create a Docker-ready host:
 ## 4. Custom Storage and Network
 
 Create VM with specific storage and network settings:
+
 ```bash
 ./pveci \
     --url https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img \
@@ -66,6 +70,7 @@ Create VM with specific storage and network settings:
 Examples for different distributions:
 
 ### Ubuntu 24.04 LTS
+
 ```bash
 ./pveci \
     --url https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img \
@@ -75,6 +80,7 @@ Examples for different distributions:
 ```
 
 ### Debian 12
+
 ```bash
 ./pveci \
     --url https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2 \
@@ -84,6 +90,7 @@ Examples for different distributions:
 ```
 
 ### Rocky Linux 9
+
 ```bash
 ./pveci \
     --url https://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud.latest.x86_64.qcow2 \
@@ -92,5 +99,5 @@ Examples for different distributions:
     --cloud-config templates/base.yaml
 ```
 
-Note: All images are downloaded directly from official sources. For offline installations, 
+Note: All images are downloaded directly from official sources. For offline installations,
 you'll need to configure a local mirror or repository with the cloud images.

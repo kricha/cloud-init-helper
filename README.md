@@ -5,19 +5,29 @@ A robust shell script tool for creating cloud-init enabled VM templates in Proxm
 ## Features
 
 - Automated VM template creation from cloud images
+
 - Smart defaults with customizable options
+
 - SSD optimization support
+
 - Custom cloud-init configuration
+
 - Automatic resource detection
+
 - Dry-run capability
+
 - Comprehensive error handling
 
 ## Prerequisites
 
 The following commands must be available on your Proxmox host:
+
 - `qm` (Proxmox VM management)
+
 - `wget` (File downloads)
+
 - `qemu-img` (Image manipulation)
+
 - `pvesm` (Proxmox storage management)
 
 ## Usage
@@ -43,31 +53,35 @@ Options:
 ## Examples
 
 1. Basic usage with Ubuntu cloud image:
-```bash
-./pveci -u https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-```
+
+   ```bash
+   ./pveci -u https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+   ```
 
 2. Custom configuration:
-```bash
-./pveci --url https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img \
+
+   ```bash
+   ./pveci --url https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img \
         --id 100 \
         --name ubuntu-template \
         --memory 2048 \
         --cores 2 \
         --size 20G
-```
+   ```
 
 3. Using custom cloud-init config:
-```bash
-./pveci -u https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img \
+
+   ```bash
+   ./pveci -u https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img \
         --cloud-config ./templates/base-and-docker.yaml
-```
+   ```
 
 ## Cloud-Init Configurations
 
 The repository includes two predefined cloud-init configurations:
 
 1. `base.yaml` - Minimal configuration with:
+
    - qemu-guest-agent installation
    - SSH service enablement
 
@@ -95,6 +109,7 @@ pveci --help
 ```
 
 #### Download Templates Only
+
 ```bash
 # Create templates directory and download
 mkdir -p templates/ && cd templates/ && \
@@ -111,42 +126,48 @@ mv base*.yaml templates/
 To get the complete repository with all examples and documentation:
 
 1. Clone the repository:
-```bash
-git clone https://github.com/kricha/cloud-init-helper.git
-```
+
+   ```bash
+   git clone https://github.com/kricha/cloud-init-helper.git
+   ```
 
 2. Make the script executable:
-```bash
-chmod +x pveci
-```
+
+   ```bash
+   chmod +x pveci
+   ```
 
 3. Optional: Move to system path:
-```bash
-sudo cp pveci /usr/local/bin/
-```
+
+   ```bash
+   sudo cp pveci /usr/local/bin/
+   ```
 
 ## Verifying Installation
 
 After installation, you can verify that everything is working correctly:
 
 1. Check script availability:
-```bash
-pveci --help
-```
+
+   ```bash
+   pveci --help
+   ```
 
 2. Verify templates:
-```bash
-# For quick install
-ls ~/.config/pveci/templates/
 
-# For repository install
-ls templates/
-```
+   ```bash
+   # For quick install
+   ls ~/.config/pveci/templates/
+
+   # For repository install
+   ls templates/
+   ```
 
 3. Test with dry-run:
-```bash
-pveci --url https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img --dry-run
-```
+
+   ```bash
+   pveci --url https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img --dry-run
+   ```
 
 ## Contributing
 

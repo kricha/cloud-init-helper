@@ -1,63 +1,65 @@
 # Troubleshooting Guide
 
-## Common Issues and Solutions
+## 1. Download Issues
 
-### 1. Image Download Issues
+### Symptoms
 
-#### Symptoms
 - Wget fails silently
-- Incomplete downloads
-- Corrupted images
-- "404 Not Found" errors
-- SSL certificate verification failures
+- No error message displayed
+- Script exits with error
 
-#### Solutions
+### Solutions
+
 1. Check Image URL:
-   ```bash
-   # Test URL accessibility
-   wget --spider <image-url>
-   
-   # For SSL issues, verify with curl
-   curl -IL <image-url>
-   ```
 
-2. Verify disk space:
-   ```bash
-   # Check available space
-   df -h /var/lib/vz/template/iso/
-   ```
+    ```bash
+    wget -O /dev/null "YOUR_IMAGE_URL"
+    ```
+
+2. Verify storage space:
+
+    ```bash
+    df -h /var/lib/vz
+    ```
 
 3. Download issues:
    - Use alternative mirrors (see cloud-images.md for official mirrors)
    - For SSL issues with trusted sources, you can use:
+
      ```bash
      wget --no-check-certificate <image-url>
      ```
+
    - For large files, use continue flag:
-     ```bash
-     wget -c <image-url>
-     ```
+
+    ```bash
+    wget -c <image-url>
+    ```
 
 4. Verify downloaded image:
-   ```bash
-   # Check file integrity
-   qemu-img check downloaded-image.qcow2
-   
-   # View image info
-   qemu-img info downloaded-image.qcow2
-   ```
 
-### 2. VM Creation Failures
+    ```bash
+    # Check file integrity
+    qemu-img check downloaded-image.qcow2
 
-#### Symptoms
+    # View image info
+    qemu-img info downloaded-image.qcow2
+    ```
+
+## 2. VM Creation Failures
+
+### Common Issues
+
 - Error during VM creation
 - VM creates but doesn't start
 - Cloud-init doesn't run
 - Permission denied errors
 - Storage pool not found
 
-#### Solutions
+### Troubleshooting Steps
+
 1. Verify Proxmox Permissions:
+
    ```bash
    # Check user permissions
    pveum user list
@@ -67,6 +69,7 @@
    ```
 
 2. Storage Issues:
+
    ```bash
    # List available storages
    pvesm status
@@ -77,16 +80,20 @@
 
 3. Cloud-init Configuration:
    - Check cloud-init drive is attached:
+
      ```bash
      qm showcmd <vmid> | grep cloud
      ```
+
    - Verify cloud-init config:
+
      ```bash
      cat /var/lib/vz/snippets/<cloud-init-file>
      ```
 
 4. QEMU Guest Agent:
    - Check if installed in template:
+
      ```bash
      # Connect to VM console
      qm terminal <vmid>
@@ -94,23 +101,28 @@
      # Inside VM, verify agent
      systemctl status qemu-guest-agent
      ```
+
    - If missing, install in template:
+
      ```bash
      apt install qemu-guest-agent   # Debian/Ubuntu
      dnf install qemu-guest-agent   # RHEL/Rocky
      ```
 
-### 3. Network Issues
+## 3. Network Issues
 
-#### Symptoms
+### Common Issues
+
 - VM has no network connectivity
 - Cannot reach the internet
 - DNS resolution fails
 - DHCP not working
 - Network interface missing
 
-#### Solutions
+### Troubleshooting Steps
+
 1. Check Bridge Configuration:
+
    ```bash
    # List network interfaces
    ip a
@@ -123,6 +135,7 @@
    ```
 
 2. VLAN Configuration:
+
    ```bash
    # View VM network config
    qm config <vmid> | grep net
@@ -133,10 +146,13 @@
 
 3. Cloud-init Network Settings:
    - Verify network configuration:
+
      ```bash
      qm cloudinit dump <vmid> network
      ```
+
    - Common cloud-init network settings:
+
      ```yaml
      network:
        version: 2
@@ -146,6 +162,7 @@
      ```
 
 4. Inside VM Checks:
+
    ```bash
    # Check network interfaces
    ip a
@@ -159,17 +176,20 @@
    cat /etc/sysconfig/network-scripts/ifcfg-* # RHEL/Rocky
    ```
 
-### 4. Storage Issues
+## 4. Storage Issues
 
-#### Symptoms
+### Common Issues
+
 - Insufficient space errors
 - Storage pool not found
 - Disk performance issues
 - I/O errors
 - Slow disk operations
 
-#### Solutions
+### Troubleshooting Steps
+
 1. Storage Pool Management:
+
    ```bash
    # List storage pools
    pvesm status
@@ -182,6 +202,7 @@
    ```
 
 2. Permission Issues:
+
    ```bash
    # Check storage permissions
    ls -la /var/lib/vz/
@@ -192,6 +213,7 @@
 
 3. Performance Optimization:
    - Check disk performance:
+
      ```bash
      # Test read performance
      dd if=/var/lib/vz/template/iso/test.img of=/dev/null bs=1M count=1000
@@ -199,7 +221,9 @@
      # Test write performance
      dd if=/dev/zero of=/var/lib/vz/template/iso/test.img bs=1M count=1000
      ```
+
    - SSD configuration:
+
      ```bash
      # Check if discard is enabled
      pvesm status | grep discard
@@ -211,6 +235,7 @@
 ## Log Locations and Monitoring
 
 ### System Logs
+
 ```bash
 # Proxmox VE logs
 tail -f /var/log/pve/tasks/index.log    # Task logs
@@ -223,6 +248,7 @@ tail -f /var/log/cloud-init-output.log  # Cloud-init output
 ```
 
 ### Monitoring Commands
+
 ```bash
 # Watch VM status
 qm status <vmid>
