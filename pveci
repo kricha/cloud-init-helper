@@ -1,0 +1,414 @@
+#!/bin/sh
+
+# Helper functions
+check_command() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "✗ Error: Required command '$1' not found"
+        exit 1
+    fi
+}
+
+is_url() {
+    case "$1" in
+        http://*|https://*|ftp://*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Validate all required commands
+check_command qm
+check_command qemu-img
+check_command pvesm
+
+# Default values
+VM_ID=""
+VM_NAME=""
+IMAGE_URL=""
+MEMORY=1024
+CORES=1
+DISK_SIZE="10G"
+NETWORK_BRIDGE="vmbr0"
+STORAGE=""
+CLOUD_CONFIG="https://raw.githubusercontent.com/kricha/cloud-init-helper/refs/heads/main/templates/base.yml"
+SNIPPETS_DIR="/var/lib/vz/snippets"
+CLOUD_CONFIG_FILE="script-cloud-config.yaml"
+DRY_RUN=false
+SSD=1
+LOCAL_IMAGE=0
+LOCAL_CONFIG=0
+
+# Function to show usage
+show_usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  -u, --url URL           Cloud image URL or local file path (required)"
+    echo "  -i, --id ID             VM ID (auto-detected if not specified)"
+    echo "  -n, --name NAME         VM name (auto-generated if not specified)"
+    echo "  -m, --memory MB         Memory in MB (default: 1024)"
+    echo "  -c, --cores NUM         Number of CPU cores (default: 1)"
+    echo "  -s, --size SIZE         Disk size (default: 10G)"
+    echo "  -b, --bridge BRIDGE     Network bridge (default: vmbr0)"
+    echo "  -t, --storage STORAGE   Storage pool (auto-detected if not specified)"
+    echo "  --cloud-config PATH     Use custom cloud-init config (file path or URL)"
+    echo "  --dry-run               Show what would be done without executing"
+    echo "  --no-ssd                Disable SSD optimization (default: enabled)"
+    echo "  -h, --help              Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "Using remote images:"
+    echo "  $0 -u https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+    echo "  $0 --url https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img --id 100 --name ubuntu-template"
+    echo ""
+    echo "Using local images:"
+    echo "  $0 -u ./ubuntu-24.04.img --name local-ubuntu"
+    echo "  $0 -u /var/lib/vz/template/iso/debian-12-generic-amd64.qcow2 --id 101"
+    echo ""
+    echo "Additional options:"
+    echo "  $0 -u https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img -m 2048 -c 2"
+    echo "  $0 -u https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img -b vmbr1 --cloud-config ./my-config.yaml"
+    echo "  $0 -u https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img --no-ssd"
+}
+
+# Parse command line arguments
+while [ $# -gt 0 ]; do
+    case $1 in
+        -u|--url)
+            IMAGE_URL="$2"
+            shift 2
+            ;;
+        -i|--id)
+            VM_ID="$2"
+            shift 2
+            ;;
+        -n|--name)
+            VM_NAME="$2"
+            shift 2
+            ;;
+        -m|--memory)
+            MEMORY="$2"
+            shift 2
+            ;;
+        -c|--cores)
+            CORES="$2"
+            shift 2
+            ;;
+        -s|--size)
+            DISK_SIZE="$2"
+            shift 2
+            ;;
+        -b|--bridge)
+            NETWORK_BRIDGE="$2"
+            shift 2
+            ;;
+        -t|--storage)
+            STORAGE="$2"
+            shift 2
+            ;;
+        --cloud-config)
+            CLOUD_CONFIG="$2"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift 1
+            ;;
+        --no-ssd)
+            SSD=0
+            shift 1
+            ;;
+        -h|--help)
+            show_usage
+            exit 0
+            ;;
+        *)
+            echo "✗ Error: Unknown option $1"
+            show_usage
+            exit 1
+            ;;
+    esac
+done
+
+# Validate required parameters
+if [ -z "$IMAGE_URL" ]; then
+    echo "✗ Error: Image URL is required"
+    show_usage
+    exit 1
+fi
+
+# Validate numeric parameters
+if ! [ "$MEMORY" -gt 0 ] 2>/dev/null; then
+    echo "✗ Error: Memory must be a positive number"
+    exit 1
+fi
+
+if ! [ "$CORES" -gt 0 ] 2>/dev/null; then
+    echo "✗ Error: Cores must be a positive number"
+    exit 1
+fi
+
+# Validate disk size format
+if ! echo "$DISK_SIZE" | grep -qE '^[0-9]+[KMG]?$'; then
+    echo "✗ Error: Invalid disk size format. Use format like 20G, 512M, etc."
+    exit 1
+fi
+
+# Validate cloud-config file exists if it's a local file
+if ! echo "$CLOUD_CONFIG" | grep -qE '^https?://' && [ ! -f "$CLOUD_CONFIG" ]; then
+    echo "✗ Error: Cloud-config file '$CLOUD_CONFIG' does not exist"
+    exit 1
+fi
+
+# Check if VM ID already exists
+if [ -n "$VM_ID" ] && qm list | grep -q "^$VM_ID "; then
+    echo "✗ Error: VM with ID $VM_ID already exists"
+    exit 1
+fi
+
+echo "Base preparation..."
+LATEST_PROXMOX_VM_ID=$(qm list | awk 'NR>1 {print $1}' | sort -n | tail -1)
+# Handle case where no VMs exist
+LATEST_PROXMOX_VM_ID=${LATEST_PROXMOX_VM_ID:-6666}
+
+# Auto-detect VM ID if not specified
+if [ -z "$VM_ID" ]; then
+    VM_ID=$((LATEST_PROXMOX_VM_ID + 1))
+fi
+
+# Auto-generate VM name if not specified
+if [ -z "$VM_NAME" ]; then
+    VM_NAME="cloud-init-$(basename "$IMAGE_URL" | cut -d. -f1)"
+fi
+
+CI_IMG=cloud_init_image.img
+# Auto-detect storage
+if [ -z "$STORAGE" ]; then
+    STORAGE=$(pvesm status -content images | awk 'NR>1 {print $1; exit}')
+    if [ -z "$STORAGE" ]; then
+        echo "✗ Error: No storage found for VM images"
+        exit 1
+    fi
+fi
+
+# Validate storage exists
+if ! pvesm status | grep -q "^$STORAGE "; then
+    echo "✗ Error: Storage '$STORAGE' not found"
+    exit 1
+fi
+
+# Ensure snippets directory exists
+if [ ! -d "$SNIPPETS_DIR" ]; then
+    echo "Creating snippets directory..."
+    mkdir -p "$SNIPPETS_DIR" || { echo "✗ Error: Failed to create snippets directory"; exit 1; }
+fi
+
+echo "Configuration:"
+echo "  VM ID: $VM_ID"
+echo "  VM Name: $VM_NAME"
+echo "  Memory: ${MEMORY}MB"
+echo "  Cores: $CORES"
+echo "  Disk Size: $DISK_SIZE"
+echo "  Storage: $STORAGE"
+echo "  Network Bridge: $NETWORK_BRIDGE"
+echo "  Cloud Config: $CLOUD_CONFIG"
+echo "  SSD Optimized: $SSD"
+echo ""
+
+if [ "$DRY_RUN" = true ]; then
+    echo "🔍 DRY RUN MODE - No changes will be made"
+    echo ""
+    echo "Would execute the following:"
+    echo "  1. Download image from: $IMAGE_URL"
+    echo "  2. Resize image to: $DISK_SIZE"
+    echo "  3. Create VM with ID: $VM_ID"
+    echo "  4. Import and attach disk"
+    echo "  5. Configure cloud-init from: $CLOUD_CONFIG"
+    echo "  6. Convert VM to template"
+    echo ""
+    echo "Template would be created with:"
+    echo "  - Memory: ${MEMORY}MB"
+    echo "  - Cores: $CORES"
+    echo "  - Network: $NETWORK_BRIDGE"
+    echo "  - Storage: $STORAGE"
+    echo "  - SSD Optimized: $SSD"
+    exit 0
+fi
+
+# Handle image source
+echo "Processing image source..."
+if is_url "$IMAGE_URL"; then
+    # For URLs, we need wget
+    check_command wget
+    
+    CI_IMG="cloud_init_image.img"
+    echo "Downloading cloud image..."
+    if wget -q "$IMAGE_URL" -O "$CI_IMG"; then
+        echo "✓ Image downloaded successfully"
+        LOCAL_IMAGE=0
+    else
+        echo "✗ Error: Failed to download image"
+        rm -f "$CI_IMG"
+        exit 1
+    fi
+else
+    # Handle local file
+    if [ ! -f "$IMAGE_URL" ]; then
+        echo "✗ Error: Local file '$IMAGE_URL' does not exist"
+        exit 1
+    fi
+    if [ ! -r "$IMAGE_URL" ]; then
+        echo "✗ Error: Cannot read local file '$IMAGE_URL'"
+        exit 1
+    fi
+    CI_IMG="$IMAGE_URL"
+    echo "✓ Using local image: $IMAGE_URL"
+    LOCAL_IMAGE=1
+fi
+
+# Validate image format
+echo "Validating image format..."
+if ! qemu-img info "$CI_IMG" >/dev/null 2>&1; then
+    echo "✗ Error: Invalid or corrupted image format"
+    [ "$LOCAL_IMAGE" = 0 ] && rm -f "$CI_IMG"
+    exit 1
+fi
+echo "✓ Image format validated"
+
+echo "Resizing image.."
+if qemu-img resize $CI_IMG $DISK_SIZE; then
+    echo "✓ Image resized successfully"
+else
+    echo "✗ Error: Failed to resize image"
+    rm -f "$CI_IMG"
+    exit 1
+fi
+
+# Create VM without the disk first
+echo "Creating VM..."
+if qm create "$VM_ID" --name "$VM_NAME" --ostype l26 \
+    --memory $MEMORY --balloon 0 \
+    --agent 1 \
+    --bios ovmf --machine q35 --efidisk0 "$STORAGE":0,pre-enrolled-keys=0 \
+    --cpu host --socket 1 --cores $CORES \
+    --vga serial0 --serial0 socket \
+    --net0 virtio,bridge=$NETWORK_BRIDGE \
+    --scsihw virtio-scsi-pci; then
+    echo "✓ VM $VM_ID created successfully"
+else
+    echo "✗ Error: Failed to create VM"
+    exit 1
+fi
+
+# Import the disk image
+echo "Importing disk image..."
+if qm importdisk "$VM_ID" "$CI_IMG" "$STORAGE" >/dev/null 2>&1; then
+    echo "✓ Disk imported successfully"
+else
+    echo "✗ Error: Failed to import disk"
+    exit 1
+fi
+
+# Attach the imported disk
+echo "Attaching disk..."
+if qm set "$VM_ID" --scsi0 "$STORAGE":vm-"$VM_ID"-disk-1,ssd=$SSD,discard=on; then
+    if [ "$SSD" = 1 ]; then
+        echo "✓ Disk attached successfully (SSD optimized, discard enabled)"
+    else
+        echo "✓ Disk attached successfully (discard enabled, SSD disabled)"
+    fi
+else
+    echo "✗ Error: Failed to attach disk"
+    exit 1
+fi
+
+# Add cloudinit disk
+qm set "$VM_ID" --ide2 "$STORAGE":cloudinit || { echo "✗ Failed to add cloudinit disk"; exit 1; }
+
+# Set boot order
+qm set "$VM_ID" --boot order=scsi0 || { echo "✗ Failed to set boot order"; exit 1; }
+
+# Handle cloud-init configuration
+echo "Processing cloud-init configuration..."
+if is_url "$CLOUD_CONFIG"; then
+    # For URLs, we need wget
+    check_command wget
+    
+    echo "Downloading cloud-config from URL: $CLOUD_CONFIG"
+    if wget -q "$CLOUD_CONFIG" -O "$SNIPPETS_DIR/$CLOUD_CONFIG_FILE"; then
+        echo "✓ Cloud-config downloaded successfully"
+        LOCAL_CONFIG=0
+    else
+        echo "✗ Error: Failed to download cloud-config from URL"
+        exit 1
+    fi
+else
+    # Handle local file
+    if [ ! -f "$CLOUD_CONFIG" ]; then
+        echo "✗ Error: Cloud-config file '$CLOUD_CONFIG' does not exist"
+        exit 1
+    fi
+    if [ ! -r "$CLOUD_CONFIG" ]; then
+        echo "✗ Error: Cannot read cloud-config file '$CLOUD_CONFIG'"
+        exit 1
+    fi
+    
+    # Validate YAML format
+    if command -v python3 >/dev/null 2>&1; then
+        if ! python3 -c "import yaml; yaml.safe_load(open('$CLOUD_CONFIG'))" 2>/dev/null; then
+            echo "✗ Warning: Cloud-config file might not be valid YAML"
+            echo "  Consider validating at https://www.yamllint.com/"
+        fi
+    fi
+    
+    echo "Using cloud-config from file: $CLOUD_CONFIG"
+    if ! cp "$CLOUD_CONFIG" "$SNIPPETS_DIR/$CLOUD_CONFIG_FILE"; then
+        echo "✗ Error: Failed to copy cloud-config file"
+        exit 1
+    fi
+    echo "✓ Cloud-config file copied successfully"
+    LOCAL_CONFIG=1
+fi
+
+# Apply cloud-init configuration
+echo "Configuring cloud-init settings..."
+qm set "$VM_ID" --cicustom "vendor=local:snippets/$CLOUD_CONFIG_FILE" || { echo "✗ Failed to set cloud init config"; exit 1; }
+
+# Enable DHCP by default
+qm set "$VM_ID" --ipconfig0 ip=dhcp || { echo "✗ Failed to set network settings"; exit 1; }
+
+# Add tags
+qm set "$VM_ID" --tags cloud-init,kricha || { echo "✗ Failed to set tags"; exit 1; }
+
+# Convert to template
+echo "Converting to template..."
+if qm template "$VM_ID"; then
+    echo "✓ Template created successfully"
+    echo ""
+    echo "🎉 Cloud-init template $VM_NAME (ID: $VM_ID) is ready!"
+    echo ""
+    echo "Template Summary:"
+    echo "  ID: $VM_ID"
+    echo "  Name: $VM_NAME"
+    echo "  Memory: ${MEMORY}MB"
+    echo "  Cores: $CORES"
+    echo "  Disk Size: $DISK_SIZE"
+    echo "  Storage: $STORAGE"
+    echo "  Network: $NETWORK_BRIDGE"
+    echo "  SSD Optimized: $SSD"
+    echo ""
+    echo "To clone this template:"
+    echo "  qm clone $VM_ID <new-vm-id> --name <new-vm-name>"
+    echo ""
+    echo "To start a VM from this template:"
+    echo "  qm clone $VM_ID <new-vm-id> --name <new-vm-name> && qm start <new-vm-id>"
+else
+    echo "✗ Error: Failed to convert to template"
+    exit 1
+fi
+
+# Cleanup downloaded files
+[ "$LOCAL_IMAGE" = 0 ] && rm -f "$CI_IMG"

@@ -1,0 +1,54 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install shellcheck
+      run: sudo apt-get install -y shellcheck
+    
+    - name: Run shellcheck
+      run: shellcheck pveci
+    
+    - name: Validate YAML files
+      run: |
+        sudo apt-get install -y yamllint
+        yamllint cloud-config/*.yaml examples/*.yaml
+    
+    - name: Check markdown files
+      uses: DavidAnson/markdownlint-cli2-action@v9
+      with:
+        globs: "**/*.md"
+
+#   release:
+#     needs: test
+#     runs-on: ubuntu-latest
+#     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+#     steps:
+#     - uses: actions/checkout@v3
+#       with:
+#         fetch-depth: 0
+    
+#     - name: Get version
+#       id: get_version
+#       run: echo "::set-output name=version::$(date +'%Y.%m.%d')"
+    
+#     - name: Create Release
+#       id: create_release
+#       uses: actions/create-release@v1
+#       env:
+#         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       with:
+#         tag_name: v${{ steps.get_version.outputs.version }}
+#         release_name: Release v${{ steps.get_version.outputs.version }}
+#         draft: false
+#         prerelease: false

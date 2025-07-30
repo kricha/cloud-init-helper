@@ -1,0 +1,51 @@
+#cloud-config
+groups:
+  - docker
+users:
+  - default
+packages:
+  - qemu-guest-agent
+write_files:
+  # MOTD welcome message
+  - path: /etc/motd
+    content: |
+      Welcome to your Proxmox cloud-init VM!
+      This VM was created with the default cloud-init configuration.
+      SSH access is enabled with key-based authentication only.
+    owner: root:root
+    permissions: '0644'
+  # SSH configuration to disable password login and root login
+  - path: /etc/ssh/sshd_config.d/cloud-init.conf
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+      ChallengeResponseAuthentication no
+    owner: root:root
+    permissions: '0644'
+  # Docker daemon configuration to limit log growth
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "local",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      }
+    permissions: '0644'
+    owner: root:root
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - |
+    PRIMARY_USER=$(getent passwd 1000 | cut -d: -f1)
+    if [ -n "$PRIMARY_USER" ]; then
+      usermod -aG docker "$PRIMARY_USER" || logger -t cloud-init "Failed to add $PRIMARY_USER to docker group"
+      logger -t cloud-init "Added user $PRIMARY_USER to docker group"
+    else
+      logger -t cloud-init "No user with UID 1000 found"
+    fi
+  - systemctl enable docker.service || true
+  - systemctl enable containerd.service || true
+  - systemctl enable qemu-guest-agent || true
+  - systemctl enable ssh || systemctl enable sshd || true
+  - reboot

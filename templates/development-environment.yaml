@@ -1,0 +1,82 @@
+#cloud-config
+# Template: Development Environment
+# Purpose: Sets up a development VM with common development tools and Docker
+# Usage: Use this template when creating development environments that need
+#        common build tools, Docker, and development user setup
+
+# System updates
+package_update: true
+package_upgrade: true
+
+# Essential development packages
+packages:
+  - qemu-guest-agent    # Required for Proxmox integration
+  - git                 # Version control
+  - build-essential    # Compilation tools
+  - python3-pip        # Python package manager
+  - nodejs             # Node.js runtime
+  - npm                # Node.js package manager
+  - curl               # HTTP client
+  - vim                # Text editor
+  - tmux               # Terminal multiplexer
+  - htop               # Process monitor
+
+# User and group setup
+groups:
+  - docker
+  - developers
+
+users:
+  - default
+  - name: developer
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: sudo, docker, developers
+    shell: /bin/bash
+    # IMPORTANT: Replace this with your actual public key
+    ssh_authorized_keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC0... # Replace with your key
+
+# System configuration
+write_files:
+  - path: /etc/motd
+    content: |
+      Development Environment
+      ----------------------
+      Welcome to your development VM!
+      
+      Available tools:
+      - Git (version control)
+      - Build Essential (compilation tools)
+      - Python3 & pip (Python development)
+      - Node.js & npm (JavaScript development)
+      - Docker (containerization)
+      - vim, tmux, htop (system tools)
+      
+      User 'developer' has sudo and docker access.
+      For security, only SSH key authentication is allowed.
+    owner: root:root
+    permissions: '0644'
+  
+  # Secure SSH configuration
+  - path: /etc/ssh/sshd_config.d/secure.conf
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+      PubkeyAuthentication yes
+    owner: root:root
+    permissions: '0644'
+
+# System initialization
+runcmd:
+  # Install Docker
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable docker
+  - systemctl start docker
+  
+  # Enable required services
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  - systemctl enable ssh
+  
+  # Set default shell for developer
+  - chsh -s /bin/bash developer
