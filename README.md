@@ -60,7 +60,7 @@ Options:
 1. Basic usage with Ubuntu cloud image:
 
    ```bash
-   ./pveci -u https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+   ./pveci -u https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img --name ubuntu-cloud
    ```
 
 2. Custom configuration:
@@ -107,7 +107,7 @@ If you just need the script without templates:
 # Download and install the script
 wget https://raw.githubusercontent.com/kricha/cloud-init-helper/main/pveci && \
 chmod +x pveci && \
-sudo mv pveci /usr/local/bin/
+mv pveci /usr/local/bin/
 
 # Verify installation
 pveci --help
